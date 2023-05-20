@@ -18,6 +18,8 @@ still working on how it will play out, hopefull I can try both ways and see what
 Todo list:
     -DONE-Fix collisions in the "def check_collision_with_enemy():" its not working :(
     -get texture for sword and eventually replace it with your own 3d model
+    -FIRST PASS DONE -Work on getting better FPS (use ground over voxel cubes)
+        -Check player input, player keys, Enemy update and collision checks!
     -Fix an issue when turning around by spamming left or right will point player in incorrect direction
     -Work on the skybox, try and make it into a square for front, back and side art
     -Add sound effect for hits and movement
@@ -52,15 +54,12 @@ Entity.default_shader = lit_with_shadows_shader  # im assuming a shader
 editor_camera = EditorCamera(enabled=False, ignore_paused=True)
 
 #ENTITYS
-'''
 
-ground = Entity(model='plane', collider='box', scale=64, texture='grass', texture_scale=(4,4)) 
+# floor to map, will need to use a custom model for a rectangle, using voxel cubes uses to much fps
+ground = Entity(model='plane', collider='box', scale=(64), texture='grass', texture_scale=(4,4))
 
-# This line of code is replaced with voxel buttons so I could change the shape of the ground and make it a button for additional features later 
- '''
 # The code below is creating the sword entity
 sword = Entity(model=sword_model, parent=camera, position=(0, -.2, 3), scale=(.005, .005, .005), rotation=(0, 0, -90), color=color.dark_gray)
-
 sword_size = Vec3(717.347, 58.9473, 57.7639)  #See see collider.py to call the class or pregenerate vector3
 sword.collider = BoxCollider(sword, center=(0, 0, 0), size=sword_size)
 
@@ -69,7 +68,7 @@ shootables_parent = Entity()  # Target for raytracing ???? residual code from ur
 sword_target = Entity()
 mouse.traverse_target = shootables_parent   # Not sure about this, but it should go soon
 
-
+'''
 # This creates the floor and boxes that have clickable features (like changing color) and I thought it would be better then 1 large ground texture
 class Voxel(Button):
     def __init__(self, position = (0,5,0), texture = grass_texture):
@@ -84,7 +83,7 @@ class Voxel(Button):
             color = color.color(0,0,random.uniform(0.9,1)),
             highlight_color = color.lime,
             scale = .5)
-
+'''
 class Enemy(Entity):
     def __init__(self,max_hp, **kwargs):
         super().__init__(parent=sword_target, model='cube', scale_y=2, origin_y=-.5, color=color.light_gray, **kwargs)
@@ -102,13 +101,13 @@ class Enemy(Entity):
         #this part changes the Enemy distance from player
         if dist > 40:
             self.color = color.red
-            self.position += self.forward * time.dt * random.uniform(1, 4)
+            self.position += self.forward * time.dt * random.uniform(1, 5)
         elif dist > 7:
-            self.position += self.forward * time.dt * random.uniform(1, 4)
+            self.position += self.forward * time.dt * random.uniform(1, 5)
             self.health_bar.alpha = 0      #Hides HP bar when far away from player
             #txt = Text(text="Charge!")
         elif dist > .1:
-            self.position -= self.forward * time.dt * random.uniform(1, 4)
+            self.position -= self.forward * time.dt * random.uniform(1, 5)
             #txt = Text(text="I'll get you!")
 
         # check to see if Enemy intersects the sword entity if so flash red, - hp
@@ -134,8 +133,8 @@ class Enemy(Entity):
             destroy(self)
             return
 
-        self.health_bar.scale_x = self.hp / self.max_hp * 1.5
-        self.health_bar.alpha = 1
+        self.health_bar.scale_x = self.hp / self.max_hp * 1.5        # Enemy Health bar
+        self.health_bar.alpha = 1                                    # shows the HP when hit
 
 
 
@@ -200,16 +199,18 @@ def pause_input(key):
 # this only works when at the bottom here
 pause_handler = Entity(ignore_paused=True, input=pause_input)
 
-#This makes the ground, we could do more depending on how we switch levels
+''' 
+#This makes the ground, could do more depending on how to switch levels
+# Turned off right now as it leads to a big drop in framrate
 for z in range(3):
     for x in range(40):
         voxel = Voxel(position = (x,0,z))
 
-
+'''
 # Calls Enemy entity
 enemies = [Enemy(x=x*4,max_hp=100) for x in range(4)]  # summons 4 enemies with 100 hp
 #enemies = [Enemy(x=x*4, max_hp=random.uniform(50, 150)) for x in range(random.uniform(1,4))] # More random added
-#enemies = Enemy(max_hp=100)
+#enemies = Enemy(max_hp=100)  #for summoning 1 enemy
 
 
 
