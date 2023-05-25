@@ -82,10 +82,16 @@ sword.flash = Entity(parent=sword, z=1, world_scale=1, model='quad', color=color
 sword_target = Entity()
 #mouse.traverse_target = shootables_parent   # Not sure about this, but it should go soon
 
+#Global variables
 sword_dmg = 0
 sword_cooldown = False
 enemy = None
 esword = None
+do_block = False
+i = 0
+text_entity = ''
+text_entity2 = ''
+text_entity3 = ''
 
 '''
 #This creates the floor and boxes that have clickable features (like changing color) and I thought it would be better then 1 large ground texture
@@ -116,6 +122,19 @@ class Enemy(Entity):
         self.collider = BoxCollider(self, size=self.scale)
         self.melee_in_progress = False
 
+
+    def blink_animation(self, blink_color):
+        duration = 0.2  # Duration of each blink
+        num_blinks = 5  # Number of blinks
+        for _ in range(num_blinks):
+            self.color = blink_color
+            invoke(self.set_default_color, delay=duration / 2)
+            duration += 0.2
+
+    def set_default_color(self):
+        # Set your default color here
+        self.color = color.white
+
     def reset_melee_flag(self):
         self.melee_in_progress = False
 
@@ -128,21 +147,22 @@ class Enemy(Entity):
         what_to_do = random.randint(1, 5)
 
         if what_to_do == 1:
-            self.animate_position(self.position + (1, 0, 0),duration=.7)
-            self.color = color.red
+            self.animate_position(self.position + (1, 0, 0), duration=.7)
+            self.blink_animation(color.red)
         elif what_to_do == 2:
-            self.animate_position(self.position + (2, 0, 1),duration=.7)
-            self.color = color.light_gray
+            self.animate_position(self.position + (2, 0, 1), duration=.7)
+            self.blink_animation(color.light_gray)
         elif what_to_do == 3:
             self.animate_position(self.position + (-1, 0, 0), duration=.7)
-            self.color = color.green
+            self.blink_animation(color.green)
         elif what_to_do == 4:
             self.animate_position(self.position + (0, 0, -1), duration=.7)
-            self.color = color.yellow
+            self.blink_animation(color.yellow)
         elif what_to_do == 5:
             self.animate_position(self.position + (0, 0, -2), duration=.7)
-            self.color = color.blue
-        # Reset the melee_in_progress flag after the melee action is completed
+            self.blink_animation(color.blue)
+
+            # Reset the melee_in_progress flag after the melee action is completed
         invoke(self.reset_melee_flag, delay=2.0)
 
 
@@ -154,8 +174,8 @@ class Enemy(Entity):
         if dist > 4:
             self.position += self.forward * time.dt * 2
         elif dist > 3.5:
-            self.melee_move()
-            self.position += self.right * time.dt * .001
+            self.melee_move()                            #call random move direction for more intense fights
+            self.position += self.right * time.dt * .001 #keeps the enemy from "vibrating" at this range
         elif dist > 0:
             self.position -= self.forward * time.dt * 8
 
@@ -176,11 +196,14 @@ class Enemy(Entity):
 
     @hp.setter          #This is need for the dmg to work, not sure y
     def hp(self, value):
-        global enemy
+        global enemy, i
         self._hp = value
         if value <= 0:
             destroy(self)
             enemy = spawn_enemy()
+            seq.append(random.choice(['left', 'right']))
+            self.health_bar.alpha = 0
+
             return
 
         self.health_bar.scale_x = self.hp / self.max_hp * 1.5        # Enemy Health bar
@@ -188,18 +211,81 @@ class Enemy(Entity):
 
 
 def spawn_enemy():
-    global enemy, esword
+    global enemy, esword, current_swing, seq, text_entity
     enemy = Enemy(max_hp=100, position=(20, 0, 0))
     esword = Entity(model=sword_model2, parent=enemy, position=(0.02, 1, .8), scale=(.002, .003, .003), rotation=(0, 0, -90), color=color.dark_gray)
     esword_size = Vec3(717.347, 58.9473, 57.7639)
     esword.collider = BoxCollider(esword, center=(0, 0, 0), size=esword_size)
+    current_swing = []  # Resets the current swing set
+    display_seq()
     return enemy
 
 def point_at_enemy():
     if enemy is not None:  # Check if an enemy exists
         player.look_at_2d(enemy.position, 'y')  # Use the position of the stored enemy
+
     else:
         print("No enemy to point at.")
+
+
+
+def display_seq():
+    global text_entity
+    if text_entity:
+        destroy(text_entity)
+    text_entity = Text(text=seq, origin=(0, -5), scale=2.5, color=color.yellow, background=False)
+
+
+
+
+
+
+
+def sequencer():  # This checks the swing, sees if the player is matching the sequence and if so deciding NOT to block the shot
+    global do_block, i, seq, sword_dmg, current_swing
+    distance = distance_xz(player.position, enemy.position)
+    if distance > 7:                    # IF player is outside the _ range then clear the current swing list
+        print("Dist ", distance)        #for testing
+        print('reseting seq',' i=', i)  #for testing
+        print('seq', seq)               #for testing
+        current_swing = []           # clearing the current swing list
+        i = 0                           # i variable to scale with the sequence list, this resets the counter to 0 because the enemy is out of range
+    else:
+
+        if seq[i] is None:              # error check
+            do_block = False
+            print('No Sequence found')
+            return do_block
+
+        if len(current_swing) > len(seq):   # If player keeps swinging, then keep blocking
+            do_block = True
+            current_swing = []
+            i = 0
+            return do_block, current_swing, i
+
+        if seq[i] == current_swing[i]:
+            if len(current_swing)-1 == len(seq)-1:
+                do_block = False
+                print('Combo!')
+                sword_dmg = 100
+                current_swing = []
+                i = 0
+                return do_block, sword_dmg, current_swing, i
+            else:
+                do_block = False
+                print('matched ', i)
+                i += 1
+                return do_block, i
+        else:
+            i = 0
+            print('You missed the sequence !')
+            do_block = True
+            current_swing = []
+            i = 0
+            return do_block, sword_dmg, current_swing, i
+
+
+
 
 def input(key):                #May need to look at changing all the "if"s to elifs or other changes to improve fps
 
@@ -228,9 +314,9 @@ def input(key):                #May need to look at changing all the "if"s to el
     #Swing left and right
 
     if key == 'left arrow':
-        swing_right()
-    if key == 'right arrow':
         swing_left()
+    if key == 'right arrow':
+        swing_right()
     if key == 'up arrow':
         swing_down()
 
@@ -241,30 +327,63 @@ def input(key):                #May need to look at changing all the "if"s to el
 
 
 
-first_in_seq = random.choice(['left','right'])
+first_in_seq = random.choice(['left', 'right'])
+seq = ['right', 'left']
+current_choice = 2  # Initialize current_choice with an index value
+current_swing = []
 
-seq = [first_in_seq]
-current_choice = 0
+def swing_right():
+    global seq, do_block, current_swing, text_entity2
+    current_swing.append('right')
+    print('swinging right', current_swing)
+    destroy(text_entity2)
+    text_entity2 = Text(text=current_swing, origin=(1, 0), scale=2.5, color=color.yellow, background=False)
+    sequencer()
+    if do_block == False: # if the do_block is false then the Enemy does NOT want to block the shot, letting it though
+        sword.rotation = (0, 0, -90)
+        sword.position = (.3, -.9, 3)
+        sword.animate('rotation_z', sword.rotation_z + 90, duration=.12)
+        sword.animate('rotation_y', sword.rotation_y - 80, duration=.12)
+        print('correct choice right')
+        print('curr swing',current_swing)
+    else:   # Else if they do not complete the combo, or keep swinging after the combo then it will decide to DO blocking
+        sword.rotation = (0, 0, -90)
+        sword.position = (.3, -.9, 3)
+        sword.animate('rotation_z', sword.rotation_z + 90, duration=.12)
+        sword.animate('rotation_y', sword.rotation_y - 40, duration=.12)
+        print('not correct choice')
+        esword.position = (-.8, .8, .8)
+        esword.animate('rotation_x', sword.rotation_x + 35, duration=.12)
+        esword.animate('rotation_z', sword.rotation_z + -35, duration=.12)
 
 def swing_left():
-    global seq, current_choice
-    if seq[current_choice] == 'left':
-        sword.rotation = (0,0,-90)                                         # reset sword position
-        sword.position = (.3, -.9, 3)                                       # move sword down some
-        sword.animate('rotation_z', sword.rotation_z + 90, duration=.12)    # sword swing down from center
-        sword.animate('rotation_y', sword.rotation_y - 80, duration=.12)
-        print('correct choice')
+    global seq, do_block, current_swing, text_entity2
+    current_swing.append('left')
+    print('swinging left', current_swing)
+    destroy(text_entity2)
+    text_entity2 = Text(text=current_swing, origin=(1, 0), scale=2.5, color=color.yellow, background=False)
+    sequencer()
+    if do_block == False:
+        sword.rotation = (0, 0, -90)
+        sword.position = (-.3, -.9, 3)
+        sword.animate('rotation_z', sword.rotation_z - 90, duration=.12)
+        sword.animate('rotation_y', sword.rotation_y + 80, duration=.12)
+        print('correct choice left')
+        print('curr swing',current_swing)
     else:
-        sword.animate('rotation_z', sword.rotation_z + 90, duration=.12)  # sword swing down from center
-        sword.animate('rotation_y', sword.rotation_y - 45, duration=.12)
+        sword.rotation = (0, 0, -90)
+        sword.position = (-.3, -.9, 3)
+        sword.animate('rotation_z', sword.rotation_z - 90, duration=.12)
+        sword.animate('rotation_y', sword.rotation_y + 40, duration=.12)
+        esword.position = (.8, .8, .8)
+        esword.animate('rotation_x', sword.rotation_x + 35, duration=.12)
+        esword.animate('rotation_z', sword.rotation_z + 35, duration=.12)
         print('not correct choice')
 
 
-def swing_right():
-    sword.rotation = (0, 0, -90)                                        # reset sword position
-    sword.position = (-.3, -.9, 3)                                        # move sword down some
-    sword.animate('rotation_z', sword.rotation_z - 90, duration=.12)     # sword swing down from center
-    sword.animate('rotation_y', sword.rotation_y + 80, duration=.12)     # sword swing forwards
+
+
+
 def swing_down():
     sword.rotation = (0,0,-90)
     sword.position = (0,-.9,3)
@@ -284,7 +403,7 @@ def sword_do_damage():
 
 
 def update():
-    global sword_dmg, sword_invis
+    #global sword_dmg, sword_invis
     if sword.intersects(sword_target).hit:
         sword.blink(color.yellow)
 
@@ -313,7 +432,7 @@ spawn_z = random.uniform(0, -5)  # Modify the range as desired for the y-axis
 #enemies = Enemy(max_hp=100, position=(5,0,0))  #for summoning 1 enemy
 '''
 enemy = spawn_enemy()
-
+#text_entity = Text(text=seq, origin=(1, 1), scale=2.5, color=color.yellow, background=False)
 
 player = FirstPersonControllerCustom(rotation_y=90, position=(0,50,0))    # I want to change this to reference the Player class, might need to move stuff from FPC to Player
 player.collider = BoxCollider(player, Vec3(0,1,0), Vec3(1,2,1))
