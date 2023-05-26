@@ -83,7 +83,7 @@ sword_target = Entity()
 #mouse.traverse_target = shootables_parent   # Not sure about this, but it should go soon
 
 #Global variables
-sword_dmg = 0
+sword_dmg = 15
 sword_cooldown = False
 enemy = None
 esword = None
@@ -148,10 +148,10 @@ class Enemy(Entity):
 
         if what_to_do == 1:
             self.animate_position(self.position + (1, 0, 0), duration=.7)
-            self.blink_animation(color.red)
+            self.blink_animation(color.black)
         elif what_to_do == 2:
             self.animate_position(self.position + (2, 0, 1), duration=.7)
-            self.blink_animation(color.light_gray)
+            self.blink_animation(color.cyan)
         elif what_to_do == 3:
             self.animate_position(self.position + (-1, 0, 0), duration=.7)
             self.blink_animation(color.green)
@@ -180,7 +180,14 @@ class Enemy(Entity):
             self.position -= self.forward * time.dt * 8
 
         if self.intersects(sword).hit:
-            self.blink(color.red)
+            global seq,i
+            if seq[i] is None:
+                self.color=color.white
+            
+            if seq[i] == 'left':
+                self.color= color.lime
+            if seq[i] == 'right':
+                self.color = color.orange
 
             if self.hp <= 0:        #I put this here b/c getting missing obj err if hp < 0 b4
                 destroy(self)
@@ -198,6 +205,7 @@ class Enemy(Entity):
     def hp(self, value):
         global enemy, i
         self._hp = value
+        sword_reset_pos()
         if value <= 0:
             destroy(self)
             enemy = spawn_enemy()
@@ -212,7 +220,7 @@ class Enemy(Entity):
 
 def spawn_enemy():
     global enemy, esword, current_swing, seq, text_entity
-    enemy = Enemy(max_hp=100, position=(20, 0, 0))
+    enemy = Enemy(max_hp=120, position=(20, 0, 0))
     esword = Entity(model=sword_model2, parent=enemy, position=(0.02, 1, .8), scale=(.002, .003, .003), rotation=(0, 0, -90), color=color.dark_gray)
     esword_size = Vec3(717.347, 58.9473, 57.7639)
     esword.collider = BoxCollider(esword, center=(0, 0, 0), size=esword_size)
@@ -236,11 +244,6 @@ def display_seq():
     text_entity = Text(text=seq, origin=(0, -5), scale=2.5, color=color.yellow, background=False)
 
 
-
-
-
-
-
 def sequencer():  # This checks the swing, sees if the player is matching the sequence and if so deciding NOT to block the shot
     global do_block, i, seq, sword_dmg, current_swing
     distance = distance_xz(player.position, enemy.position)
@@ -249,6 +252,7 @@ def sequencer():  # This checks the swing, sees if the player is matching the se
         print('reseting seq',' i=', i)  #for testing
         print('seq', seq)               #for testing
         current_swing = []           # clearing the current swing list
+        destroy(text_entity2)
         i = 0                           # i variable to scale with the sequence list, this resets the counter to 0 because the enemy is out of range
     else:
 
@@ -260,15 +264,17 @@ def sequencer():  # This checks the swing, sees if the player is matching the se
         if len(current_swing) > len(seq):   # If player keeps swinging, then keep blocking
             do_block = True
             current_swing = []
+            destroy(text_entity2)
             i = 0
             return do_block, current_swing, i
 
-        if seq[i] == current_swing[i]:
+        if i < len(seq) and i < len(current_swing) and seq[i] == current_swing[i]:
             if len(current_swing)-1 == len(seq)-1:
                 do_block = False
                 print('Combo!')
-                sword_dmg = 100
+                sword_dmg = 45
                 current_swing = []
+                destroy(text_entity2)
                 i = 0
                 return do_block, sword_dmg, current_swing, i
             else:
@@ -281,6 +287,7 @@ def sequencer():  # This checks the swing, sees if the player is matching the se
             print('You missed the sequence !')
             do_block = True
             current_swing = []
+            destroy(text_entity2)
             i = 0
             return do_block, sword_dmg, current_swing, i
 
@@ -332,6 +339,12 @@ seq = ['right', 'left']
 current_choice = 2  # Initialize current_choice with an index value
 current_swing = []
 
+def sword_reset_pos():
+    sword.rotation = (0, 0, -90)
+    sword.position = (.3, -.9, 3)
+    esword.position = (0.02, 1, .8)
+    esword.rotation = (0, 0, -90)
+
 def swing_right():
     global seq, do_block, current_swing, text_entity2
     current_swing.append('right')
@@ -340,22 +353,18 @@ def swing_right():
     text_entity2 = Text(text=current_swing, origin=(1, 0), scale=2.5, color=color.yellow, background=False)
     sequencer()
     if do_block == False: # if the do_block is false then the Enemy does NOT want to block the shot, letting it though
-        sword.rotation = (0, 0, -90)
-        sword.position = (.3, -.9, 3)
+        sword_reset_pos()
         sword.animate('rotation_z', sword.rotation_z + 90, duration=.12)
         sword.animate('rotation_y', sword.rotation_y - 80, duration=.12)
-        print('correct choice right')
-        print('curr swing',current_swing)
-    else:   # Else if they do not complete the combo, or keep swinging after the combo then it will decide to DO blocking
-        sword.rotation = (0, 0, -90)
-        sword.position = (.3, -.9, 3)
+        sword_reset_pos()
+    else:
+        sword_reset_pos()
         sword.animate('rotation_z', sword.rotation_z + 90, duration=.12)
         sword.animate('rotation_y', sword.rotation_y - 40, duration=.12)
-        print('not correct choice')
+        sword_reset_pos()
         esword.position = (-.8, .8, .8)
         esword.animate('rotation_x', sword.rotation_x + 35, duration=.12)
-        esword.animate('rotation_z', sword.rotation_z + -35, duration=.12)
-
+        esword.animate('rotation_z', sword.rotation_z - 35, duration=.12)
 def swing_left():
     global seq, do_block, current_swing, text_entity2
     current_swing.append('left')
@@ -364,17 +373,16 @@ def swing_left():
     text_entity2 = Text(text=current_swing, origin=(1, 0), scale=2.5, color=color.yellow, background=False)
     sequencer()
     if do_block == False:
-        sword.rotation = (0, 0, -90)
-        sword.position = (-.3, -.9, 3)
+        sword_reset_pos()
         sword.animate('rotation_z', sword.rotation_z - 90, duration=.12)
         sword.animate('rotation_y', sword.rotation_y + 80, duration=.12)
-        print('correct choice left')
-        print('curr swing',current_swing)
+        sword_reset_pos()
+
     else:
-        sword.rotation = (0, 0, -90)
-        sword.position = (-.3, -.9, 3)
+        sword_reset_pos()
         sword.animate('rotation_z', sword.rotation_z - 90, duration=.12)
         sword.animate('rotation_y', sword.rotation_y + 40, duration=.12)
+        sword_reset_pos()
         esword.position = (.8, .8, .8)
         esword.animate('rotation_x', sword.rotation_x + 35, duration=.12)
         esword.animate('rotation_z', sword.rotation_z + 35, duration=.12)
@@ -397,8 +405,8 @@ def sword_do_damage():
     if sword_cooldown:
         return 0
     sword_cooldown = True
-    sword_dmg = 5
-    invoke(sword_reset_cooldown, delay=.2)  # Reset the cooldown after 2 seconds
+    sword_dmg = 15
+    invoke(sword_reset_cooldown, delay=.3)  # Reset the cooldown after .2 seconds
     return sword_dmg
 
 
@@ -496,3 +504,4 @@ Note 2
                 is_hit = True
 
         '''
+
